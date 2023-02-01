@@ -1,0 +1,15 @@
+Resources:
+  OrderTopic:
+    Type: AWS::SNS::Topic
+    Properties: 
+      Subscription: 
+        - Endpoint: "kejnovalitnejno@gmail.com"
+          Protocol: "email"
+      TopicName: "order-topic"
+
+Outputs:
+  OrderTopicArn:
+    Description: "ARN for Order topic"
+    Value: !Ref OrderTopic
+    Export:
+      Name: "OrderTopicExportNew"

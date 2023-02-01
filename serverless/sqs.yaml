@@ -1,0 +1,23 @@
+Resources:
+  OrderQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt OrderDLQueue.Arn
+        maxReceiveCount: 5
+
+  OrderDLQueue:
+    Type: AWS::SQS::Queue
+
+Outputs:
+  OrderQueueUrl:
+    Description: "URL of order queue"
+    Value: !GetAtt OrderQueue.Arn
+    Export:
+      Name: "OrderQueueArnExport"
+      
+  OrderDLQueueUrl:
+    Description: "URL of order dead-letter queue"
+    Value: !GetAtt OrderDLQueue.Arn
+    Export:
+      Name: "OrderDLQueueArnExport"

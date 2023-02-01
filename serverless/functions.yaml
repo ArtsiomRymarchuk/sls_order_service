@@ -1,0 +1,251 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description: AWS Lambda functions.
+Resources:
+  GetOrders:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ../src/order-api/functions/get-orders/
+      Handler: app.getOrders
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          ORDER_TABLE:
+            Fn::ImportValue: !Sub OrderTableExportNew
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:Query 
+              - dynamodb:Scan
+            # Resource: arn:aws:dynamodb:*:*:table/order-table
+            Resource:
+              - !Sub 
+                - 'arn:aws:dynamodb:*:*:table/${Table}'
+                - Table: 
+                    Fn::ImportValue: !Sub OrderTableExportNew
+          - Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - "*"    
+        
+  PostOrders:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ../src/order-api/functions/post-orders/
+      Handler: app.postOrders
+      Runtime: nodejs14.x
+      Events:
+        SQSEventSource:
+          Type: SQS
+          Properties:
+            Queue: 
+              Fn::ImportValue: !Sub OrderQueueArnExport
+            BatchSize: 10
+      Environment:
+        Variables:
+          # ORDER_TABLE:
+          #   Fn::ImportValue: !Sub OrderTableExportNew
+          STATE_MACHINE_ARN: !Ref OrderManagementSFN
+      Policies:
+        Statement:
+          # - Effect: Allow
+          #   Action:
+          #     - dynamodb:PutItem
+          #   Resource:
+          #     - !Sub 
+          #       - 'arn:aws:dynamodb:*:*:table/${Table}'
+          #       - Table: 
+          #           Fn::ImportValue: !Sub OrderTableExportNew 
+          - Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - "*"  
+          - Effect: Allow
+            Action:
+              - states:StartExecution
+            Resource:
+              - !Sub 
+                - '${StateMachine}'
+                - { StateMachine: !Ref OrderManagementSFN }
+
+  GetSingleOrder:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ../src/order-api/functions/get-single-order/
+      Handler: app.getOrderById
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          ORDER_TABLE:
+            Fn::ImportValue: !Sub OrderTableExportNew
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+            Resource:
+              - !Sub 
+                - 'arn:aws:dynamodb:*:*:table/${Table}'
+                - Table: 
+                    Fn::ImportValue: !Sub OrderTableExportNew 
+          - Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - "*"  
+
+  UpdateOrder:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ../src/order-api/functions/update-order/
+      Handler: app.updateOrder
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          ORDER_TABLE:
+            Fn::ImportValue: !Sub OrderTableExportNew
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:UpdateItem
+            Resource:
+              - !Sub 
+                - 'arn:aws:dynamodb:*:*:table/${Table}'
+                - Table: 
+                    Fn::ImportValue: !Sub OrderTableExportNew 
+          - Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - "*"    
+
+  DeleteOrder:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: ../src/order-api/functions/delete-order/
+      Handler: app.deleteOrder
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          ORDER_TABLE:
+            Fn::ImportValue: !Sub OrderTableExportNew
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:DeleteItem
+            Resource:
+              - !Sub 
+                - 'arn:aws:dynamodb:*:*:table/${Table}'
+                - Table: 
+                    Fn::ImportValue: !Sub OrderTableExportNew
+          - Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - "*"    
+
+  ProcessPaymentFumction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/order-management/functions/process-payment/
+      Handler: app.processPayment
+      Runtime: nodejs14.x
+
+  SendOrderToRestaurantFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/order-management/functions/sendordertorestaurant/
+      Handler: app.sendOrderToRestaurant
+      Runtime: nodejs14.x
+
+  ManageStateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/order-management/functions/managestate/
+      Handler: app.manageState
+      Runtime: nodejs14.x
+      Environment:
+        Variables:
+          ORDER_TABLE:
+            Fn::ImportValue: !Sub OrderTableExportNew
+          SNS_TOPIC_ARN:
+            Fn::ImportValue: !Sub OrderTopicExportNew
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:Query 
+              - dynamodb:Scan
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+            Resource:
+              - !Sub 
+                - 'arn:aws:dynamodb:*:*:table/${Table}'
+                - Table: 
+                    Fn::ImportValue: !Sub OrderTableExportNew
+          - Effect: Allow
+            Action:
+              - logs:*
+            Resource:
+              - "*"    
+          - Effect: Allow
+            Action:
+              - SNS:Publish
+            Resource:
+              - "*"    
+
+  OrderManagementSFN:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: ../src/order-management/statemachine/process-order.asl.json
+      DefinitionSubstitutions:
+        ManageStateArn: !GetAtt ManageStateFunction.Arn
+        ProcessPaymentArn: !GetAtt ProcessPaymentFumction.Arn
+        SendOrderToRestaurantArn: !GetAtt SendOrderToRestaurantFunction.Arn
+      Policies: 
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ManageStateFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ProcessPaymentFumction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SendOrderToRestaurantFunction
+
+Outputs:
+
+  GetOrders:
+    Description: "GetOrders Lambda Function ARN"
+    Value: !GetAtt GetOrders.Arn
+    Export:
+      Name: "GetOrdersArnExportNew"
+
+  PostOrders:
+    Description: "PostOrders Lambda Function ARN"
+    Value: !GetAtt PostOrders.Arn
+    Export:
+      Name: "PostOrdersExportArnExportNew"
+
+  GetSingleOrder:
+    Description: "GetSingleOrder Lambda Function ARN"
+    Value: !GetAtt GetSingleOrder.Arn
+    Export:
+      Name: "GetSingleOrderArnExportNew"
+
+  UpdateOrder:
+    Description: "UpdateOrder Lambda Function ARN"
+    Value: !GetAtt UpdateOrder.Arn
+    Export:
+      Name: "UpdateOrderAnrExportNew"
+
+  DeleteOrder:
+    Description: "DeleteOrder Lambda Function ARN"
+    Value: !GetAtt DeleteOrder.Arn
+    Export: 
+      Name: "DeleteOrderArnExportNew"
+
