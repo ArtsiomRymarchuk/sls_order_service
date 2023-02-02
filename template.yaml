@@ -42,6 +42,12 @@ Resources:
       # SNS Topic
       Location: ./serverless/sns.yaml
 
+  cognito:
+    Type: AWS::Serverless::Application
+    Properties:
+      # Cognito User Pool
+      Location: ./serverless/cognito.yaml
+
 
 
 

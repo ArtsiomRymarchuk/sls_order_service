@@ -128,3 +128,19 @@ Next, you can use AWS Serverless Application Repository to deploy ready to use A
 
 
 [Build, Secure, Manage Serverless Applications at Scale on AWS](https://catalog.us-east-1.prod.workshops.aws/workshops/b34eab03-4ebe-46c1-bc63-cd2d975d8ad4/en-US)
+[Lambda authorizer examples on AWS](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-controlling-access-to-apis-lambda-authorizer.html)
+[Authentication Overview](https://catalog.us-east-1.prod.workshops.aws/workshops/b34eab03-4ebe-46c1-bc63-cd2d975d8ad4/en-US/lab4-authentication/overview)
+
+export USER_POOL_ID=`aws cloudformation describe-stacks --region us-east-1 | jq -r '.Stacks[] | select( .StackName | contains("cognito"))' | jq -r '.Outputs[] | select( .OutputKey | contains("CognitoUserPoolID"))' | jq -r ".OutputValue"`
+
+export CLIENT_ID=`aws cloudformation describe-stacks --region us-east-1 | jq -r '.Stacks[] | select( .StackName | contains("cognito"))' | jq -r '.Outputs[] | select( .OutputKey | contains("CognitoClientID"))' | jq -r ".OutputValue"`
+
+export CLIENT_SECRET=`aws cognito-idp describe-user-pool-client --user-pool-id $USER_POOL_ID --client-id $CLIENT_ID  --region us-east-1 | jq -r ".UserPoolClient.ClientSecret"`
+
+export SECRET_HASH=`echo -n "$USERNAME$CLIENT_ID" | openssl dgst -sha256 -hmac $CLIENT_SECRET -binary | openssl enc -base64`
+
+ORDERID=<YOUR-ORDER-ID> # Check Fetch Orders Testing Section, and grab one of the Order ID after fetching all orders.
+
+curl -I -s --header "Authorization: Bearer $IDTOKEN" --request DELETE $API_ENDPOINT/$ORDERID
+
+sam deploy --no-confirm-changeset --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND
